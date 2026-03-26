@@ -2,8 +2,12 @@ import math
 import typing
 
 import einops
-import flash_attn
-import flash_attn.layers.rotary
+try:
+  import flash_attn
+  import flash_attn.layers.rotary
+  HAS_FLASH_ATTN = True
+except ImportError:
+  HAS_FLASH_ATTN = False
 import huggingface_hub
 import omegaconf
 import torch
@@ -109,6 +113,24 @@ def rotate_half(x):
   return torch.cat((-x2, x1), dim=-1)
 
 
+def _apply_rotary_emb_torch_fallback(x, cos, sin):
+  """Pure PyTorch rotary embedding (no flash_attn dependency).
+  x: (batch, seq_len, n_heads, head_dim)
+  cos, sin: (seq_len, head_dim // 2)
+  """
+  d = cos.shape[-1]  # half of head_dim
+  x1 = x[..., :d]
+  x2 = x[..., d:2*d]
+  # Broadcast cos/sin to match x shape
+  cos = cos[None, :, None, :]  # (1, seq, 1, d)
+  sin = sin[None, :, None, :]  # (1, seq, 1, d)
+  o1 = x1 * cos - x2 * sin
+  o2 = x1 * sin + x2 * cos
+  if x.shape[-1] > 2 * d:
+    return torch.cat([o1, o2, x[..., 2*d:]], dim=-1)
+  return torch.cat([o1, o2], dim=-1)
+
+
 def split_and_apply_rotary_pos_emb(qkv, rotary_cos_sin):
   with torch.amp.autocast('cuda', enabled=False):
     cos, sin = rotary_cos_sin
@@ -117,10 +139,16 @@ def split_and_apply_rotary_pos_emb(qkv, rotary_cos_sin):
     cos = cos[0,:,0,0,:cos.shape[-1]//2]
     sin = sin[0,:,0,0,:sin.shape[-1]//2]
     q, k, v = qkv.chunk(3, dim=2)
-    q = flash_attn.layers.rotary.apply_rotary_emb_torch(
-      q.squeeze(dim=2), cos, sin)
-    k = flash_attn.layers.rotary.apply_rotary_emb_torch(
-      k.squeeze(dim=2), cos, sin)
+    if HAS_FLASH_ATTN:
+      q = flash_attn.layers.rotary.apply_rotary_emb_torch(
+        q.squeeze(dim=2), cos, sin)
+      k = flash_attn.layers.rotary.apply_rotary_emb_torch(
+        k.squeeze(dim=2), cos, sin)
+    else:
+      q = _apply_rotary_emb_torch_fallback(
+        q.squeeze(dim=2), cos, sin)
+      k = _apply_rotary_emb_torch_fallback(
+        k.squeeze(dim=2), cos, sin)
     v = v.squeeze(dim=2)
   return q, k, v
 
@@ -128,7 +156,14 @@ def split_and_apply_rotary_pos_emb(qkv, rotary_cos_sin):
 def apply_rotary_pos_emb(qkv, cos, sin):
   cos = cos[0,:,0,0,:cos.shape[-1]//2]
   sin = sin[0,:,0,0,:sin.shape[-1]//2]
-  return flash_attn.layers.rotary.apply_rotary_emb_qkv_(qkv, cos, sin)
+  if HAS_FLASH_ATTN:
+    return flash_attn.layers.rotary.apply_rotary_emb_qkv_(qkv, cos, sin)
+  else:
+    # Fallback: split qkv, apply rotary to q and k, recombine
+    q, k, v = qkv[:, :, 0], qkv[:, :, 1], qkv[:, :, 2]
+    q = _apply_rotary_emb_torch_fallback(q, cos, sin)
+    k = _apply_rotary_emb_torch_fallback(k, cos, sin)
+    return torch.stack([q, k, v], dim=2)
 
 
 def regular_attention_multi_headed(q, k, v):
@@ -281,15 +316,27 @@ class DDiTBlockCausal(nn.Module):
       qkv = apply_rotary_pos_emb(
         qkv, cos.to(qkv.dtype), sin.to(qkv.dtype)
       )
-    qkv = einops.rearrange(qkv, 'b s ... -> (b s) ...')
-    cu_seqlens = torch.arange(
-      0, (batch_size + 1) * seq_len,
-      step=seq_len, dtype=torch.int32, device=qkv.device)
-    x = flash_attn.flash_attn_interface.flash_attn_varlen_qkvpacked_func(
-      qkv, cu_seqlens, seq_len, 0.0, causal=True)
-
-    x = einops.rearrange(x, '(b s) h d -> b s (h d)',
-                         b=batch_size)
+    if HAS_FLASH_ATTN:
+      qkv_flat = einops.rearrange(qkv, 'b s ... -> (b s) ...')
+      cu_seqlens = torch.arange(
+        0, (batch_size + 1) * seq_len,
+        step=seq_len, dtype=torch.int32, device=qkv_flat.device)
+      x = flash_attn.flash_attn_interface.flash_attn_varlen_qkvpacked_func(
+        qkv_flat, cu_seqlens, seq_len, 0.0, causal=True)
+      x = einops.rearrange(x, '(b s) h d -> b s (h d)',
+                           b=batch_size)
+    else:
+      # SDPA fallback for T4 / non-flash-attn environments
+      q, k, v = qkv[:, :, 0], qkv[:, :, 1], qkv[:, :, 2]
+      x = F.scaled_dot_product_attention(
+        query=q.transpose(1, 2),
+        key=k.transpose(1, 2),
+        value=v.transpose(1, 2),
+        attn_mask=None,
+        dropout_p=0.0,
+        is_causal=True)
+      x = x.transpose(1, 2)
+      x = einops.rearrange(x, 'b s h d -> b s (h d)')
 
     scale = torch.ones(1, device=x.device, dtype=x.dtype)
     x = bias_dropout_scale_fn(

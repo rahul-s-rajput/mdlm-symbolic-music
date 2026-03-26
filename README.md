@@ -1,159 +1,214 @@
-<div align="center">
+# MDLM for Symbolic Music Generation
 
-# The Diffusion Duality Series
+> **Forked from [s-sahoo/duo](https://github.com/s-sahoo/duo).**
+> This fork applies Masked Diffusion Language Models (MDLM) and an Autoregressive (AR) Transformer baseline to symbolic music generation on MAESTRO v3, as part of EAI 6020: AI System Technologies at Northeastern University (Spring 2026).
 
-</div>
+---
 
-## [Chapter I (ICML 2025)](https://arxiv.org/abs/2506.10892)
+## Overview
 
-By [Subham Sekhar Sahoo](https://s-sahoo.github.io), [Justin Deschenaux](https://jdeschena.com), [Aaron Gokaslan](https://skylion007.github.io),
-[Guanghan Wang](https://tech.cornell.edu/people/guanghan-wang/), [Justin Chiu](https://justinchiu.netlify.app), [Volodymyr Kuleshov](https://www.cs.cornell.edu/~kuleshov/)
+This project is the first application of MDLM (Sahoo et al., NeurIPS 2024) to symbolic music generation using MIDI tokens. MDLM's bidirectional masked diffusion is compared against an AR Transformer baseline under identical model capacity and training conditions.
 
-[![GitHub](https://img.shields.io/badge/GitHub-Repo-181717?logo=github&logoColor=white)](https://github.com/s-sahoo/duo/tree/ch-1)
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1Sf7R-dqdR6gq-H8nyZ9E3ZkyvqMTqcwq?usp=sharing)
-[![YouTube](https://img.shields.io/badge/YouTube-%23FF0000.svg?logo=YouTube&logoColor=white)](https://youtu.be/FCO-nnqHOqQ?si=4eGnj5zbRgyCYWwI)
-[![deploy](https://img.shields.io/badge/Blog%20%20-8A2BE2)](http://s-sahoo.github.io/duo)
-[![arXiv](https://img.shields.io/badge/arXiv-2406.07524-red.svg)](https://arxiv.org/abs/2506.10892)
-[![deploy](https://img.shields.io/badge/🤗-Huggingface-blue)](https://huggingface.co/collections/s-sahoo/duo-67f9ff8fde919224e5fbd875)
+**Key results:**
 
-**Unlocks few-step generation in discrete diffusion-LLMs via the underlying Gaussian diffusion.**
+| Model | Params | Best Val NLL | Best Val PPL |
+|-------|--------|-------------|-------------|
+| AR Baseline | 38.1M | 1.805 | 6.08 |
+| MDLM | 43.1M | **1.741** | **5.70** |
 
-<div align="center">
-  <img src="https://github.com/s-sahoo/duo/blob/gh-pages/static/images/duo_schematic.png" width="60%">
-</div>
+MDLM also uniquely enables **musical infilling** (reconstructing masked middle sections of real pieces), achieving PCHO 0.855 and groove similarity 0.640 over 50 MAESTRO validation pieces.
 
-## [Chapter II: Ψ-Samplers and Efficient Curriculum (ICLR 2026)](https://arxiv.org/abs/2602.21185)
-By  [Justin Deschenaux](https://jdeschena.com), [Caglar Gulcehre](https://www.caglar.ai),
-[Subham Sekhar Sahoo](https://s-sahoo.github.io)
+---
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1uFSzrfG0KXhGcohRIfWIM2Y7V9Q7cQNA?usp=sharing)
-[![deploy](https://img.shields.io/badge/Blog%20%20-8A2BE2)](http://s-sahoo.github.io/duo-ch2)
-[![arXiv](https://img.shields.io/badge/arXiv-2406.07524-red.svg)](https://arxiv.org/abs/2602.21185)
-<!-- [![deploy](https://img.shields.io/badge/🤗-Huggingface-blue)](https://huggingface.co/collections/s-sahoo/duo-67f9ff8fde919224e5fbd875) -->
+## Repository Structure
 
-**Uniform-state beats Masked diffusion on text and image generation!**
-<div align="center">
-  <img src="https://github.com/s-sahoo/duo-ch2/blob/gh-pages/static/images/psi-samplers-figure.png" width="90%">
-</div>
+```
+duo/
+├── configs/                  # Hydra configs (data, model, algo, etc.)
+│   ├── config.yaml
+│   ├── data/maestro.yaml     # ← added: MAESTRO dataset config
+│   ├── model/midi-small.yaml # ← added: small DIT config for MIDI
+│   └── ...
+├── models/                   # DIT backbone, EMA, UNet
+│   └── dit.py                # ← modified: conditional flash-attn import
+├── scripts/                  # ← added: all project-specific scripts
+│   ├── preprocess_maestro.py # tokenize + chunk MAESTRO → HuggingFace dataset
+│   ├── generate_samples.py   # unconditional generation (AR + MDLM)
+│   ├── infilling.py          # MDLM infilling experiment
+│   ├── evaluate_metrics.py   # MusPy music quality metrics
+│   ├── evaluate_infilling.py # PCHO / groove / NDR infilling metrics
+│   ├── midi_to_audio.py      # MIDI → WAV via tinysoundfont
+│   ├── plot_training_curves.py # training curve plots from WandB CSVs
+│   └── sanity_check.py       # quick data/model sanity check
+├── outputs/
+│   ├── figures/              # training curve PNGs
+│   ├── metrics_comparison.png
+│   ├── metrics_results.json
+│   ├── infilling_metrics.json
+│   ├── wandb_val_nll.csv
+│   └── wandb_val_ppl.csv
+├── algo.py                   # ← modified: AR.nll() signature fix
+├── dataloader.py             # ← modified: MidiTokenizer + MAESTRO loading
+├── main.py                   # ← modified: weights_only monkey-patch
+├── trainer_base.py
+├── metrics.py
+├── utils.py
+├── DEVLOG.md                 # full change log used for the report
+├── requirements.txt          # core dependencies
+├── requirements-midi.txt     # MIDI-specific dependencies
+└── LICENSE
+```
 
-This repository contains the code for the two papers in the Diffusion Duality series. It includes:
-- **Duo / $\text{Duo}^\text{++}$** sampling (ancestral, ReMDM, $\Psi$-samplers, greedy-tail) — [Sampling & Eval](#sampling--eval)
-- Original and efficient curriculum training strategies — [Training](#training)
-- Discrete Consistency Distillation (DCD) — [Distillation](#discrete-consistency-distillation)
-- Baselines (AR, MDLM, SEDD, D3PM) — [Baselines](#baselines)
+**Files modified from upstream DUO:**
+- `algo.py` — added `**kwargs` to `AR.nll()` to match `trainer_base._loss()` signature
+- `dataloader.py` — added `MidiTokenizer` class and MAESTRO dataset loading
+- `main.py` — monkey-patch for PyTorch 2.6 `weights_only=True` checkpoint loading
+- `models/dit.py` — conditional `flash_attn` import with SDPA fallback for T4 GPUs
+- `configs/data/maestro.yaml` — new config for MAESTRO dataset
+- `configs/model/midi-small.yaml` — new 12L/512d/8h DIT config (~43M params)
 
-[Getting Started](#getting-started) | [Checkpoints](#checkpoints) | [Citation](#acknowledgements--citation)
+---
 
-# Getting Started
-<a name="getting_started"></a>
-
-To get started, create a conda environment containing the required dependencies.
+## Setup
 
 ```bash
-conda create -n duo python=3.12
-conda activate duo
-conda install nvidia/label/cuda-12.4.0::cuda-toolkit
+# 1. Clone
+git clone https://github.com/YOUR_USERNAME/mdlm-symbolic-music.git
+cd mdlm-symbolic-music
+
+# 2. Install core dependencies
 pip install -r requirements.txt
-pip install flash_attn==2.7.4.post1
+
+# 3. Install MIDI dependencies
+pip install -r requirements-midi.txt
+
+# 4. Download MAESTRO v3
+#    https://magenta.tensorflow.org/datasets/maestro
+#    Extract to data/maestro-v3.0.0/
+
+# 5. Tokenize and chunk
+python scripts/preprocess_maestro.py \
+    --maestro_dir data/maestro-v3.0.0 \
+    --output_dir data/maestro_tokenized
+
+# 6. (Optional) Download soundfont for audio rendering
+#    Get GeneralUser GS from https://schristiancollins.com/generaluser.php
+#    Place as GeneralUser-GS.sf2 in the project root
 ```
 
-# Checkpoints
-<a name="checkpoints"></a>
+---
 
-* **Duo** (Language Modeling): Trained on OpenWebText for `1M` training steps (distilled / base):
-  * [Huggingface](https://huggingface.co/collections/s-sahoo/duo-67f9ff8fde919224e5fbd875)🤗.
-  * [Google Drive folder](https://drive.google.com/drive/folders/1JpqFM8XRvifwIkjWPfMyuDvu41r1yk0t?usp=share_link) as the HF checkpoints can't be finetuned.
-* **Duo** (Image Modeling): Trained on CIFAR-10
-  * [Huggingface (contains the raw checkpoints)](https://huggingface.co/jdeschena/duo2-cifar10)
-* **Baselines** (SEDD, MDLM, AR): Trained on OpenWebText
-  * [Google Drive folder](https://drive.google.com/drive/folders/16LuuptK7Xfk-vzhQYZBZ0SA-B-BFluau?usp=sharing) — download `ar.ckpt`, `mdlm.ckpt`, `sedd.ckpt`.
+## Training
 
-# Training
-<a name="training"></a>
-
-This repo implements the original Duo curriculum, as well as the fast $\text{Duo}^\text{++}$ curriculum. By default, the training scripts use the original curriculum. To enable the efficient curriculum, simply replace `algo.curriculum.mode=simple` by `algo.curriculum.mode=poly9` (see comments in each training script).
-
-To train $\text{Duo}^\text{++}$, use the following scripts:
-* LM1B
-  * w/ sentencepacking (same as in D3PM)
-    * Training script: [`scripts/train_lm1b_duo_sentencepacking.sh`](./scripts/train_lm1b_duo_sentencepacking.sh)
-    * [Wandb run](https://api.wandb.ai/links/kuleshov-group/huwt0ek3) 
-  * w/o sentencepacking (same as in MDLM, SEDD)
-    * Training script: [`scripts/train_lm1b_duo.sh`](./scripts/train_lm1b_duo.sh)
-    * [Wandb run](https://api.wandb.ai/links/sahoo-diffusion/lkv5z3tm)
-    
-* OWT: [`scripts/train_owt_duo.sh`](./scripts/train_owt_duo.sh).
-* CIFAR-10:
-  * Duo: [`scripts/train_cifar10_duo_cosine.sh`](./scripts/train_cifar10_duo_cosine.sh)
-  * MDLM: [`scripts/train_cifar10_mdlm_cosine.sh`](./scripts/train_cifar10_mdlm_cosine.sh)
-  * Both scripts default to a cosine noise schedule. To use log-linear instead, set `noise=log-linear`.
-
-**Notes:**
-* Run `mkdir watch_folder` to create a directory to store slurm logs,
-  and then run any script in [`scripts/`](scripts) as a slurm job: `sbatch scripts/ABC_XYZ.sh`
-* Control the batch size per GPU using the argument `loader.batch_size`. If `loader.batch_size * num_gpus < loader.global_batch_size`, PyTorch Lightning resorts to gradient accumulation. 
-
-# Discrete Consistency Distillation
-<a name="distillation"></a>
-
-To distill a model using the Discrete Consistency Distillation (`Alg. 1` in the [Duo paper](https://arxiv.org/abs/2506.10892)), use [`scripts/distil_owt.sh`](scripts/distil_owt.sh).
-
-
-# Sampling & Eval
-<a name="sampling"></a>
-
-## Likelihood
-To compute test perplexity on the validation set of OWT use [`scripts/eval_owt_duo.sh`](scripts/eval_owt_duo.sh) and for zero shot perplexities use [`scripts/zero_shot_duo.sh`](scripts/zero_shot_duo.sh).
-
-## Sampling
-You can sample with ancestral sampling using the scripts in [`scripts/gen_ppl_*.sh`](scripts/). To sample with the PC samplers such as ReMDM and our $\Psi$-samplers, use the scripts in [`scripts/psi_samplers`](scripts/psi_samplers). This directory contains examples for sampling text and images.
-
-To use the "Greedy-tail sampler" (equivalent to nucleus sampling in AR models; see `Sec. 4.2` in the paper), set `sampling.noise_removal=greedy`. Using the default `sampling.noise_removal=ancestral` will produce more diverse samples (higher entropy) but with worse generative perplexity.
-
-To sample from a HuggingFace checkpoint (text only), run the following command:
 ```bash
+# AR Baseline
 python main.py \
-  mode=sample_eval \
-  loader.batch_size=2 \
-  loader.eval_batch_size=8 \
-  data=openwebtext-split \
-  algo=duo_base \
-  algo.backbone=hf_dit \
-  eval.checkpoint_path=s-sahoo/duo-distilled \
-  sampling.steps=8 \
-  sampling.num_sample_batches=1 \
-  sampling.noise_removal=greedy \
-  +wandb.offline=true 
+    data=maestro \
+    model=midi-small \
+    algo=ar \
+    trainer.max_steps=25000 \
+    attn_backend=sdpa
+
+# MDLM
+python main.py \
+    data=maestro \
+    model=midi-small \
+    algo=mdlm \
+    trainer.max_steps=25000 \
+    sampling.predictor=ancestral_cache \
+    attn_backend=sdpa
 ```
 
-To use the example scripts with raw checkpoints (see [Checkpoints](#checkpoints)), download them and set the checkpoint path in the script.
+**Hardware used:**
+- AR: Kaggle 2×T4 (~12 hrs)
+- MDLM: Azure 1×T4 (~20 hrs)
 
-# Baselines
-<a name="baselines"></a>
-Download the baseline checkpoints (see [Checkpoints](#checkpoints)) and specify the paths appropriately in the respective shell scripts:
-* [`scripts/eval_owt_*.sh`](scripts/) for computing validation perplexity on OWT.
-* [`scripts/gen_ppl_*.sh`](scripts/) for generating text samples and evaluating them.
-* [`scripts/zero_shot_*.sh`](scripts/) for computing zero shot perplexities.
-* [`scripts/train_*.sh`](scripts/) for training the models.
+---
 
-# Acknowledgements & Citation
-This repository was built off of [MDLM's Github repository](https://github.com/kuleshov-group/mdlm). Cite our papers using:
+## Evaluation
+
+```bash
+# Generate samples (adjust --checkpoint path)
+python scripts/generate_samples.py \
+    --model ar   --checkpoint ar_best.ckpt   --num_samples 50
+python scripts/generate_samples.py \
+    --model mdlm --checkpoint mdlm_best.ckpt --num_samples 50
+
+# MusPy music quality metrics
+python scripts/evaluate_metrics.py
+
+# MDLM infilling
+python scripts/infilling.py \
+    --checkpoint mdlm_best.ckpt --num_pieces 50
+
+# Infilling quality metrics (PCHO / groove / NDR)
+python scripts/evaluate_infilling.py
+
+# Convert MIDI to audio
+python scripts/midi_to_audio.py --soundfont GeneralUser-GS.sf2
+
+# Plot training curves (from WandB CSV exports)
+python scripts/plot_training_curves.py
 ```
-@inproceedings{
-    sahoo2025the,
-    title={The Diffusion Duality},
-    author={Subham Sekhar Sahoo and Justin Deschenaux and Aaron Gokaslan and Guanghan Wang and Justin T Chiu and Volodymyr Kuleshov},
-    booktitle={Forty-second International Conference on Machine Learning},
-    year={2025},
-    url={https://openreview.net/forum?id=9P9Y8FOSOk}
+
+---
+
+## Results
+
+### Training Curves
+
+![Training Curves](outputs/figures/val_nll_ppl_combined.png)
+
+### Music Quality Metrics (n=50 per model)
+
+![Metrics Comparison](outputs/metrics_comparison.png)
+
+### Infilling Quality (n=50 MAESTRO validation pieces)
+
+| Metric | Mean | Std |
+|--------|------|-----|
+| Pitch Class Histogram Overlap (PCHO) | 0.855 | ±0.107 |
+| Groove Similarity | 0.640 | ±0.155 |
+| Note Density Ratio | 0.968 | ±0.381 |
+
+---
+
+## Key Bugs Fixed (vs upstream DUO)
+
+1. MidiTok v3: `special_tokens_ids` is a list, not a dict — use `tokenizer["PAD_None"]`
+2. Windows: `os.sched_getaffinity` not available — added `_get_num_proc()` fallback in `dataloader.py`
+3. T4 GPU: `flash_attn` import crash — conditional import with SDPA fallback in `models/dit.py`
+4. AR NLL signature mismatch — added `**kwargs` to `AR.nll()` in `algo.py`
+5. PyTorch 2.6 checkpoint loading — monkey-patch `weights_only=True` in `main.py`
+
+---
+
+## Citation
+
+If you use this code, please cite the original DUO paper:
+
+```bibtex
+@inproceedings{sahoo2025duo,
+  title={The Diffusion Duality},
+  author={Sahoo, Subham and others},
+  booktitle={ICML},
+  year={2025}
 }
+```
 
-@inproceedings{
-    deschenaux2026the,
-    title={The Diffusion Duality, Chapter {II}: \${\textbackslash}Psi\$-Samplers and Efficient Curriculum},
-    author={Justin Deschenaux and Caglar Gulcehre and Subham Sekhar Sahoo},
-    booktitle={The Fourteenth International Conference on Learning Representations},
-    year={2026},
-    url={https://openreview.net/forum?id=RSIoYWIzaP}
+And the MDLM paper:
+
+```bibtex
+@inproceedings{sahoo2024mdlm,
+  title={Simple and Effective Masked Diffusion Language Models},
+  author={Sahoo, Subham and others},
+  booktitle={NeurIPS},
+  year={2024}
 }
 ```
+
+---
+
+## License
+
+Apache 2.0 — see [LICENSE](LICENSE). This fork inherits the upstream license.

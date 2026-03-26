@@ -1,0 +1,16 @@
+# ~50M parameter model for MIDI (vocab ~422)
+# With vocab 422 and hidden_size 512:
+#   Embedding: 422 * 512 = ~216K params
+#   Transformer: 12 layers * (4 * 512^2 + 2 * 512^2) = ~18.9M per layer... 
+#   Total: ~50M params (nearly all in transformer body)
+name: midi-small
+type: ddit
+hidden_size: 512
+cond_dim: 128
+length: 1024
+n_blocks: 12
+n_heads: 8
+scale_by_sigma: True
+dropout: 0.1
+tie_word_embeddings: False
+vocab_lookup: True

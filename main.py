@@ -18,6 +18,15 @@ import algo
 import dataloader
 import utils
 
+# PyTorch 2.6 fix: torch.load now defaults to weights_only=True, breaking
+# Lightning checkpoint loading (omegaconf types, MidiTokenizer, builtins, etc.).
+# We own and trust our own checkpoints, so restore pre-2.6 behavior globally.
+_orig_torch_load = torch.load
+def _patched_torch_load(*args, **kwargs):
+    kwargs['weights_only'] = False  # force override Lightning's weights_only=True
+    return _orig_torch_load(*args, **kwargs)
+torch.load = _patched_torch_load
+
 omegaconf.OmegaConf.register_new_resolver(
   'cwd', os.getcwd)
 omegaconf.OmegaConf.register_new_resolver(
@@ -44,14 +53,6 @@ def _print_config(
   config: omegaconf.DictConfig,
   resolve: bool = True,
   save_cfg: bool = True) -> None:
-  """Prints content of DictConfig using Rich library and its tree structure.
-  
-  Args:
-    config (DictConfig): Configuration composed by Hydra.
-    resolve (bool): Whether to resolve reference fields of DictConfig.
-    save_cfg (bool): Whether to save the configuration tree to a file.
-  """
-
   style = 'dim'
   tree = rich.tree.Tree('CONFIG', style=style, guide_style=style)
 
@@ -112,11 +113,6 @@ def _generate_samples(diffusion_model, config, logger,
         num_strides=num_strides,
         dt=1 / config.sampling.steps)
       text_samples = intermediate_samples[-1]
-      # Note: Samples generated using semi-ar method
-      # need to to be processed before computing generative perplexity
-      # since these samples contain numerous <|endoftext|> tokens
-      # and diffusion.compute_generative_perplexity() discards
-      # any text after the first EOS token.
     else:
       samples = model.restore_model_and_sample(
         num_steps=config.sampling.steps)
@@ -139,9 +135,9 @@ def _generate_samples(diffusion_model, config, logger,
                'generated_seqs': all_samples}, f, indent=4)
   logger.info(f'Samples saved at: {samples_path}',)
 
+
 def _eval_ppl(diffusion_model, config, logger, tokenizer):
   logger.info('Starting Perplexity Eval.')
-
   model = _load_from_checkpoint(
     diffusion_model=diffusion_model,
     config=config,
@@ -186,7 +182,6 @@ def _train(diffusion_model, config, logger, tokenizer):
   else:
     ckpt_path = None
 
-  # Lightning callbacks
   callbacks = []
   if 'callbacks' in config:
     for _, callback in config.callbacks.items():
@@ -219,7 +214,6 @@ def _eval_fid(diffusion_model, config, logger, tokenizer):
   fabric = Fabric(accelerator=config.trainer.accelerator,
                   devices=config.trainer.devices,
                   num_nodes=config.trainer.num_nodes)
-  
   fabric.launch()
   seed = config.seed + fabric.global_rank
   L.seed_everything(seed)
@@ -237,8 +231,7 @@ def _eval_fid(diffusion_model, config, logger, tokenizer):
   assert config.data.train == 'cifar10', \
                     'FID eval only implemented for CIFAR-10'
 
-  # Like in flow matching papers: FID against train
-  loader, _ = dataloader.get_dataloaders(config, 
+  loader, _ = dataloader.get_dataloaders(config,
     tokenizer=tokenizer, skip_valid=True)
 
   sampler = DistributedSampler(
@@ -254,30 +247,23 @@ def _eval_fid(diffusion_model, config, logger, tokenizer):
     num_workers=loader.num_workers if hasattr(loader, 'num_workers') else 0,
     pin_memory=getattr(loader, 'pin_memory', False))
   
-  # Check each GPU must generate the same number of images
   assert len(loader) == len(loader.dataset) // loader.batch_size // fabric.world_size, \
      f'{len(loader)=}, {len(loader.dataset)=}, {loader.batch_size=}, {fabric.world_size=}'
 
-  fid_calculator = FrechetInceptionDistance(
-    normalize=False).to(fabric.device)
-  is_calculator = InceptionScore(
-    normalize=False).to(fabric.device)
+  fid_calculator = FrechetInceptionDistance(normalize=False).to(fabric.device)
+  is_calculator = InceptionScore(normalize=False).to(fabric.device)
   
   desc = f'(Rank {fabric.global_rank}) Sampling...'
   for batch in tqdm(loader, desc=desc):
     real_samples = batch['input_ids']
-    # Generate images with labels matching the true data
     labels = batch['labels']
-
     gen_samples = model.generate_samples(
-      num_samples=real_samples.shape[0], 
+      num_samples=real_samples.shape[0],
       num_steps=config.sampling.steps,
       labels=labels)
-    # Reshape 1D seq -> 2D image
     gen_samples = model.tokenizer.batch_decode(gen_samples)
     real_samples = model.tokenizer.batch_decode(
       real_samples).to(fabric.device)
-
     fid_calculator.update(gen_samples, real=False)
     fid_calculator.update(real_samples, real=True)
     is_calculator.update(gen_samples)
@@ -286,7 +272,6 @@ def _eval_fid(diffusion_model, config, logger, tokenizer):
   logger.info('Done sampling. Computing FID & IS...')
   fid = fid_calculator.compute()
   incep_score = is_calculator.compute()
-
   if fabric.global_rank == 0:
     logger.info(f'FID: {fid}')
     logger.info(f'IS: {incep_score}')

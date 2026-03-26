@@ -27,6 +27,63 @@ import utils
 LOGGER = utils.get_logger(__name__)
 
 
+class MidiTokenizer:
+  """Wrapper around MidiTok tokenizer that provides the interface DUO expects.
+  
+  DUO's codebase needs: vocab_size, bos_token_id, eos_token_id,
+  mask_token_id, pad_token_id, encode(), decode(), batch_decode().
+  """
+  def __init__(self, data_dir):
+    vocab_info_path = os.path.join(data_dir, 'vocab_info.json')
+    with open(vocab_info_path) as f:
+      info = json.load(f)
+    
+    # MASK is already included in MidiTok's vocab_size (as a special token),
+    # so we do NOT add +1 here. DUO's algo classes check for mask_token
+    # and won't add another one since we set it below.
+    self.vocab_size = info['vocab_size']
+    self._base_vocab_size = info['vocab_size']
+    self.pad_token_id = info['pad_id']
+    self.bos_token_id = info['bos_id']
+    self.eos_token_id = info['eos_id']
+    self.mask_token_id = info['mask_id']
+    
+    # String aliases expected by DUO
+    self.bos_token = str(self.bos_token_id)
+    self.eos_token = str(self.eos_token_id)
+    self.pad_token = str(self.pad_token_id)
+    self.mask_token = str(self.mask_token_id)
+    self.cls_token = self.bos_token
+    self.sep_token = self.eos_token
+    
+    self._data_dir = data_dir
+  
+  def __len__(self):
+    return self.vocab_size
+  
+  def encode(self, text, **kwargs):
+    """Not used for pre-tokenized data, but needed for interface."""
+    if isinstance(text, str):
+      return [int(x) for x in text.split() if x.isdigit()]
+    return text
+  
+  def decode(self, ids):
+    """Convert token IDs back to a string representation."""
+    if torch.is_tensor(ids):
+      ids = ids.cpu().tolist()
+    return ' '.join(str(i) for i in ids)
+  
+  def batch_decode(self, batch_ids):
+    """Decode a batch of token ID sequences."""
+    if torch.is_tensor(batch_ids):
+      batch_ids = batch_ids.cpu().tolist()
+    return [self.decode(ids) for ids in batch_ids]
+  
+  def __call__(self, text, **kwargs):
+    """Tokenize text (passthrough for pre-tokenized data)."""
+    return {'input_ids': self.encode(text)}
+
+
 
 class RawPixelsVisionTokenizer:
   def __init__(self, vocab_size, image_size,
@@ -485,6 +542,14 @@ def _group_texts(examples, block_size, bos, eos):
   return result
 
 
+def _get_num_proc():
+  """Get number of available CPUs (cross-platform)."""
+  try:
+    return len(os.sched_getaffinity(0))  # Linux
+  except AttributeError:
+    return os.cpu_count() or 1  # Windows / macOS fallback
+
+
 def get_dataset(dataset_name,
                 tokenizer,
                 wrap,
@@ -492,13 +557,28 @@ def get_dataset(dataset_name,
                 cache_dir,
                 insert_eos=True,
                 block_size=1024,
-                num_proc=len(os.sched_getaffinity(0)),
+                num_proc=None,
                 streaming=False,
                 revision : Optional[str]=None):
+  if num_proc is None:
+    num_proc = _get_num_proc()
   if dataset_name == 'cifar10':
     assert mode in ('train', 'validation')
     return DiscreteCIFAR10(cache_dir=cache_dir, 
                            train=mode=='train')
+  
+  # --- MAESTRO MIDI (pre-tokenized) ---
+  if dataset_name.startswith('maestro-'):
+    split = dataset_name.replace('maestro-', '')  # 'train', 'validation', 'test'
+    split_path = os.path.join(cache_dir, split)
+    if not utils.fsspec_exists(split_path):
+      raise FileNotFoundError(
+        f'Pre-tokenized MAESTRO data not found at {split_path}. '
+        f'Run preprocess_maestro.py first.')
+    LOGGER.info(f'Loading pre-tokenized MAESTRO {split} from: {split_path}')
+    ds = datasets.load_from_disk(split_path).with_format('torch')
+    LOGGER.info(f'  Loaded {len(ds)} chunks')
+    return ds
   eos_tag = ''
   if not insert_eos:
     eos_tag = '_eosFalse'
@@ -710,6 +790,8 @@ def get_dataset(dataset_name,
 
 
 def get_tokenizer(config):
+  if config.data.tokenizer_name_or_path == 'midi':
+    return MidiTokenizer(data_dir=config.data.cache_dir)
   if config.data.tokenizer_name_or_path == 'text8':
     tokenizer = Text8Tokenizer()
   elif config.data.tokenizer_name_or_path == 'bert-base-uncased':

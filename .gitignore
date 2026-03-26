@@ -2,8 +2,31 @@
 
 .hf_cache
 test/
-outputs/
 wandb/
+
+# Large binary / data files — do not commit
+*.ckpt
+*.pt
+*.pth
+*.sf2
+*.mid
+*.wav
+*.mp3
+
+# Dataset — download via preprocess_maestro.py
+data/
+
+# Generated outputs — keep results JSONs and PNGs but not audio/MIDI
+outputs/generated/
+outputs/infilling/
+
+# Keep these (commit them)
+# outputs/figures/
+# outputs/metrics_results.json
+# outputs/infilling_metrics.json
+# outputs/metrics_comparison.png
+# outputs/wandb_val_nll.csv
+# outputs/wandb_val_ppl.csv
 watch_folder/
 notes.md
 grid_search.sh

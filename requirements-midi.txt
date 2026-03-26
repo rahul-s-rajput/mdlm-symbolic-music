@@ -1,0 +1,18 @@
+# ============================================================
+# MIDI Music Generation - Additional Dependencies
+# Install AFTER the base requirements.txt:
+#   pip install -r requirements.txt
+#   pip install -r requirements-midi.txt
+# ============================================================
+
+# MIDI tokenization
+miditok
+symusic          # MidiTok v3+ backend (replaces miditoolkit)
+
+# Music evaluation
+muspy          # Symbolic music metrics (pitch entropy, groove consistency, etc.)
+pretty_midi    # MIDI manipulation and analysis
+
+# Utilities
+tqdm                    # Progress bars (already in base, but explicit)
+matplotlib              # Plotting training curves and token distributions

@@ -38,9 +38,9 @@ class AR(trainer_base.TrainerBase):
     valid_tokens = valid_tokens[:, 1:]
     return input_tokens, output_tokens, valid_tokens
 
-  def nll(self, input_tokens, output_tokens,
-          current_accumulation_step):
-    del current_accumulation_step
+  def nll(self, input_tokens, labels, output_tokens,
+          current_accumulation_step, train_mode=False):
+    del current_accumulation_step, labels, train_mode
     output = self.backbone(input_tokens, None)
     output[:, :, self.mask_index] = self.neg_infinity
     output = output.log_softmax(-1)

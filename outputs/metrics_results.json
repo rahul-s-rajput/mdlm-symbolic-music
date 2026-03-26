@@ -1,0 +1,50 @@
+{
+  "AR": {
+    "empty_beat_rate": 0.048,
+    "empty_beat_rate_std": 0.0579,
+    "groove_consistency": 0.569,
+    "groove_consistency_std": 0.0874,
+    "n_pitches_used": 44.08,
+    "n_pitches_used_std": 6.5752,
+    "pitch_class_entropy": 3.104,
+    "pitch_class_entropy_std": 0.1881,
+    "pitch_range": 58.92,
+    "pitch_range_std": 8.6182,
+    "polyphony": 2.3456,
+    "polyphony_std": 0.3802,
+    "polyphony_rate": 0.3032,
+    "polyphony_rate_std": 0.1178
+  },
+  "MDLM": {
+    "empty_beat_rate": 0.0628,
+    "empty_beat_rate_std": 0.0599,
+    "groove_consistency": 0.5693,
+    "groove_consistency_std": 0.0755,
+    "n_pitches_used": 44.6,
+    "n_pitches_used_std": 6.6693,
+    "pitch_class_entropy": 3.204,
+    "pitch_class_entropy_std": 0.1619,
+    "pitch_range": 58.68,
+    "pitch_range_std": 9.1486,
+    "polyphony": 2.2819,
+    "polyphony_std": 0.3908,
+    "polyphony_rate": 0.2614,
+    "polyphony_rate_std": 0.097
+  },
+  "MAESTRO (Real)": {
+    "empty_beat_rate": 0.0336,
+    "empty_beat_rate_std": 0.037,
+    "groove_consistency": 0.5928,
+    "groove_consistency_std": 0.1054,
+    "n_pitches_used": 41.82,
+    "n_pitches_used_std": 8.3873,
+    "pitch_class_entropy": 3.15,
+    "pitch_class_entropy_std": 0.1536,
+    "pitch_range": 52.22,
+    "pitch_range_std": 9.698,
+    "polyphony": 2.6646,
+    "polyphony_std": 0.5462,
+    "polyphony_rate": 0.394,
+    "polyphony_rate_std": 0.1811
+  }
+}
