@@ -9,7 +9,6 @@ wandb/
 *.pt
 *.pth
 *.sf2
-*.mid
 *.wav
 *.mp3
 
