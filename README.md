@@ -20,6 +20,46 @@ MDLM also uniquely enables **musical infilling** (reconstructing masked middle s
 
 ---
 
+## Project Details
+
+### Research Question
+
+Autoregressive (AR) Transformers dominate symbolic music generation but are fundamentally limited to left-to-right generation — they cannot condition on future context or fill in missing sections of a piece. Masked Diffusion Language Models (MDLM, NeurIPS 2024) train across all masking rates simultaneously, enabling both unconditional generation and native infilling. This project asks: does MDLM's success on text transfer to symbolic music, and does bidirectional context help despite music's strongly sequential temporal structure?
+
+### Dataset
+
+MAESTRO v3 contains 1,276 professional piano performances (~200 hours) from the International Piano-e-Competition. All MIDI files are tokenized using MidiTok v3 with the REMI scheme, which encodes music as sequences of BAR, POSITION, PITCH, VELOCITY, and DURATION tokens. Sequences are chunked to 1,024 tokens with 512-token overlap, preserving piece boundaries so no chunk spans two different pieces. This produces 41,528 training chunks, 4,694 validation chunks, and 5,412 test chunks over a vocabulary of 348 tokens.
+
+### Models
+
+Both models share an identical DIT (Diffusion Transformer) backbone with 12 layers, 512 hidden dimensions, 8 attention heads, rotary positional embeddings, and pre-norm. The only architectural differences are:
+
+- **AR Baseline (38.1M params):** causal (left-to-right) attention, trained with next-token prediction cross-entropy.
+- **MDLM (43.1M params):** bidirectional attention, trained by masking tokens at all rates from 0–100% and learning to reconstruct them. The extra 5M parameters over AR are entirely in time-conditioning layers.
+
+### Training
+
+Both models are trained for 25,000 optimizer steps with effective batch size 64, fp16 mixed precision, and Adam optimizer. AR training used Kaggle 2×T4 GPUs (~40-50 hrs). MDLM training used a single Azure T4 GPU (~60-70 hrs). Training was monitored via WandB; the CSV exports are in `outputs/`.
+
+### Evaluation
+
+Three evaluation axes are used:
+
+1. **Density estimation** — Validation NLL and perplexity tracked throughout training. Lower is better.
+2. **Generation quality** — MusPy metrics (pitch class entropy, pitch range, unique pitches, polyphony, polyphony rate, empty beat rate, groove consistency) computed over 50 generated samples per model and compared against 50 real MAESTRO validation pieces.
+3. **Infilling (MDLM only)** — The middle 50% of 50 MAESTRO validation pieces is masked (256 context tokens, 512 masked, 256 suffix) and reconstructed via 500 ancestral denoising steps. Quality is measured using Pitch Class Histogram Overlap (PCHO), groove similarity, and Note Density Ratio — standard metrics from recent symbolic music infilling literature (MIDI-RWKV, Pasquier et al., 2025).
+
+### Key Findings
+
+- MDLM achieves val NLL 1.741 vs AR's 1.805, a 3.5% improvement, but requires approximately 4× more training steps to converge.
+- Both models produce statistically comparable MusPy metrics at n=50, confirming they learned the same underlying musical distribution.
+- MDLM infilling achieves PCHO 0.855 (high tonal coherence) and groove similarity 0.640 (moderate rhythmic consistency). AR cannot perform infilling at all.
+- The key differentiator between the models is infilling capability, not unconditional generation quality.
+
+For full methodology, analysis, and discussion see the DEVLOG.md (implementation diary) and the accompanying course report.
+
+---
+
 ## Repository Structure
 
 ```
