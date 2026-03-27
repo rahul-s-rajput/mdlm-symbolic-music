@@ -576,12 +576,16 @@ python generate_samples.py --model mdlm --checkpoint ../mdlm_best_nll1.741.ckpt 
 | 6250 | 10 | 1.824 | +0.015 | |
 | 6875 | 11 | 1.843 | +0.019 | |
 | 7500 | 12 | 1.867 | +0.024 | |
-| 8124 | 13 | 1.879 | +0.012 | Stopped — 5 epochs of overfitting |
+| 8124 | 13 | 1.879 | +0.012 | Overfitting confirmed, best.ckpt already saved at step 5000 |
+| ... | ... | ... | ... | Training continued to completion |
+| 25000 | ~40 | ~2.55 | — | **Training complete** — max_steps reached |
 
 **Final AR model: best.ckpt, val/nll = 1.805, global_step 5000 (epoch 8)**
+- Training ran to full 25,000 steps as configured (max_steps=25000, ~40-50 hours on Kaggle 2×T4)
+- Best checkpoint was saved at step 5,000; model continued overfitting after that point
+- The full training curve (steps 0–25,000) is visible in outputs/figures/val_nll_curves.png — AR NLL rises from 1.805 back to ~2.55 by step 25k, consistent with significant overfitting on a small dataset
 - Checkpoint loading fixed via `kwargs['weights_only'] = False` monkey-patch in main.py
 - `Restored all states from the checkpoint at /kaggle/working/checkpoints/best.ckpt` ✅
 - Two harmless warnings on resume:
   1. Callback mismatch (every_n_train_steps 2500→650): no effect on training
   2. Dataloader not resumable: epoch 3 restarts from beginning, negligible data overlap
-- Training running on 2×T4, max_steps=25000, effective batch=64
