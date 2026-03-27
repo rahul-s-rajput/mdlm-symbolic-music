@@ -20,6 +20,9 @@ data/
 outputs/generated/
 outputs/infilling/
 
+# But DO commit curated samples
+!outputs/samples/
+
 # Keep these (commit them)
 # outputs/figures/
 # outputs/metrics_results.json

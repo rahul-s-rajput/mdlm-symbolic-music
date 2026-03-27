@@ -213,6 +213,27 @@ python scripts/plot_training_curves.py
 
 ---
 
+## Audio Samples
+
+All generated MIDI files are committed to [`outputs/samples/`](outputs/samples/):
+
+```
+outputs/samples/
+├── ar/           # 50 unconditional AR generations
+├── mdlm/         # 50 unconditional MDLM generations
+└── infilling/    # 50 pieces × 3 files = 150 MIDIs
+                  # (piece_N_original.mid / piece_N_masked.mid / piece_N_infilled.mid)
+```
+
+Total: 250 MIDI files, ~431KB. Play in any MIDI player (VLC, GarageBand, MuseScore). To convert to audio:
+```bash
+python scripts/midi_to_audio.py --input outputs/samples/ --soundfont GeneralUser-GS.sf2
+```
+
+Full WAV renders are available on Hugging Face Hub at [rahul016/mdlm-symbolic-music](https://huggingface.co/rahul016/mdlm-symbolic-music) under `audio/`.
+
+---
+
 ## Results
 
 ### Training Curves
