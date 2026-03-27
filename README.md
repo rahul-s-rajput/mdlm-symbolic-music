@@ -26,46 +26,36 @@ MDLM also uniquely enables **musical infilling** (reconstructing masked middle s
 duo/
 ├── configs/                  # Hydra configs (data, model, algo, etc.)
 │   ├── config.yaml
-│   ├── data/maestro.yaml     # ← added: MAESTRO dataset config
-│   ├── model/midi-small.yaml # ← added: small DIT config for MIDI
+│   ├── data/maestro.yaml
+│   ├── model/midi-small.yaml
 │   └── ...
 ├── models/                   # DIT backbone, EMA, UNet
-│   └── dit.py                # ← modified: conditional flash-attn import
-├── scripts/                  # ← added: all project-specific scripts
-│   ├── preprocess_maestro.py # tokenize + chunk MAESTRO → HuggingFace dataset
-│   ├── generate_samples.py   # unconditional generation (AR + MDLM)
-│   ├── infilling.py          # MDLM infilling experiment
-│   ├── evaluate_metrics.py   # MusPy music quality metrics
-│   ├── evaluate_infilling.py # PCHO / groove / NDR infilling metrics
-│   ├── midi_to_audio.py      # MIDI → WAV via tinysoundfont
-│   ├── plot_training_curves.py # training curve plots from WandB CSVs
-│   └── sanity_check.py       # quick data/model sanity check
+├── scripts/                  # Project-specific scripts
+│   ├── preprocess_maestro.py
+│   ├── generate_samples.py
+│   ├── infilling.py
+│   ├── evaluate_metrics.py
+│   ├── evaluate_infilling.py
+│   ├── midi_to_audio.py
+│   └── plot_training_curves.py
 ├── outputs/
-│   ├── figures/              # training curve PNGs
+│   ├── figures/
 │   ├── metrics_comparison.png
 │   ├── metrics_results.json
 │   ├── infilling_metrics.json
 │   ├── wandb_val_nll.csv
 │   └── wandb_val_ppl.csv
-├── algo.py                   # ← modified: AR.nll() signature fix
-├── dataloader.py             # ← modified: MidiTokenizer + MAESTRO loading
-├── main.py                   # ← modified: weights_only monkey-patch
+├── algo.py
+├── dataloader.py
+├── main.py
 ├── trainer_base.py
 ├── metrics.py
 ├── utils.py
-├── DEVLOG.md                 # full change log used for the report
-├── requirements.txt          # core dependencies
-├── requirements-midi.txt     # MIDI-specific dependencies
+├── DEVLOG.md
+├── requirements.txt
+├── requirements-midi.txt
 └── LICENSE
 ```
-
-**Files modified from upstream DUO:**
-- `algo.py` — added `**kwargs` to `AR.nll()` to match `trainer_base._loss()` signature
-- `dataloader.py` — added `MidiTokenizer` class and MAESTRO dataset loading
-- `main.py` — monkey-patch for PyTorch 2.6 `weights_only=True` checkpoint loading
-- `models/dit.py` — conditional `flash_attn` import with SDPA fallback for T4 GPUs
-- `configs/data/maestro.yaml` — new config for MAESTRO dataset
-- `configs/model/midi-small.yaml` — new 12L/512d/8h DIT config (~43M params)
 
 ---
 
@@ -73,7 +63,7 @@ duo/
 
 ```bash
 # 1. Clone
-git clone https://github.com/YOUR_USERNAME/mdlm-symbolic-music.git
+git clone https://github.com/rahul-s-rajput/mdlm-symbolic-music.git
 cd mdlm-symbolic-music
 
 # 2. Install core dependencies
@@ -119,9 +109,39 @@ python main.py \
     attn_backend=sdpa
 ```
 
-**Hardware used:**
-- AR: Kaggle 2×T4 (~12 hrs)
-- MDLM: Azure 1×T4 (~20 hrs)
+**Hardware and training time:**
+- AR: Kaggle 2×T4 (~40-50 hrs)
+- MDLM: Azure 1×T4 (~60-70 hrs)
+
+---
+
+## Checkpoints
+
+Trained checkpoints are hosted on Hugging Face Hub: [rahul016/mdlm-symbolic-music](https://huggingface.co/rahul016/mdlm-symbolic-music)
+
+```python
+from huggingface_hub import hf_hub_download
+
+# AR baseline (38.1M params, val NLL 1.805)
+hf_hub_download(
+    repo_id="rahul016/mdlm-symbolic-music",
+    filename="ar_best.ckpt",
+    local_dir="."
+)
+
+# MDLM (43.1M params, val NLL 1.741)
+hf_hub_download(
+    repo_id="rahul016/mdlm-symbolic-music",
+    filename="mdlm_best_nll1.741.ckpt",
+    local_dir="."
+)
+```
+
+Or via CLI:
+```bash
+huggingface-cli download rahul016/mdlm-symbolic-music ar_best.ckpt --local-dir .
+huggingface-cli download rahul016/mdlm-symbolic-music mdlm_best_nll1.741.ckpt --local-dir .
+```
 
 ---
 
@@ -170,16 +190,6 @@ python scripts/plot_training_curves.py
 | Pitch Class Histogram Overlap (PCHO) | 0.855 | ±0.107 |
 | Groove Similarity | 0.640 | ±0.155 |
 | Note Density Ratio | 0.968 | ±0.381 |
-
----
-
-## Key Bugs Fixed (vs upstream DUO)
-
-1. MidiTok v3: `special_tokens_ids` is a list, not a dict — use `tokenizer["PAD_None"]`
-2. Windows: `os.sched_getaffinity` not available — added `_get_num_proc()` fallback in `dataloader.py`
-3. T4 GPU: `flash_attn` import crash — conditional import with SDPA fallback in `models/dit.py`
-4. AR NLL signature mismatch — added `**kwargs` to `AR.nll()` in `algo.py`
-5. PyTorch 2.6 checkpoint loading — monkey-patch `weights_only=True` in `main.py`
 
 ---
 
