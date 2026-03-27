@@ -577,7 +577,7 @@ python generate_samples.py --model mdlm --checkpoint ../mdlm_best_nll1.741.ckpt 
 | 6875 | 11 | 1.843 | +0.019 | |
 | 7500 | 12 | 1.867 | +0.024 | |
 | 8124 | 13 | 1.879 | +0.012 | Overfitting confirmed, best.ckpt already saved at step 5000 |
-| ... | ... | ... | ... | Training continued to completion |
+| 8124–25000 | 14–40 | 1.88→2.55 | — | Training ran to completion; no new best checkpoints saved |
 | 25000 | ~40 | ~2.55 | — | **Training complete** — max_steps reached |
 
 **Final AR model: best.ckpt, val/nll = 1.805, global_step 5000 (epoch 8)**
