@@ -47,7 +47,7 @@ Three evaluation axes are used:
 
 1. **Density estimation** — Validation NLL and perplexity tracked throughout training. Lower is better.
 2. **Generation quality** — MusPy metrics (pitch class entropy, pitch range, unique pitches, polyphony, polyphony rate, empty beat rate, groove consistency) computed over 50 generated samples per model and compared against 50 real MAESTRO validation pieces.
-3. **Infilling (MDLM only)** — The middle 50% of 50 MAESTRO validation pieces is masked (256 context tokens, 512 masked, 256 suffix) and reconstructed via 500 ancestral denoising steps. Quality is measured using Pitch Class Histogram Overlap (PCHO), groove similarity, and Note Density Ratio — standard metrics from recent symbolic music infilling literature (MIDI-RWKV, Pasquier et al., 2025).
+3. **Infilling (MDLM only)** — The middle 50% of 50 MAESTRO validation pieces is masked (256 context tokens, 512 masked, 256 suffix) and reconstructed via 500 ancestral denoising steps. Quality is measured using Pitch Class Histogram Overlap (PCHO), groove similarity, and Note Density Ratio — standard metrics from recent symbolic music infilling literature (MIDI-GPT, Pasquier et al., 2025).
 
 ### Key Findings
 
@@ -79,7 +79,11 @@ duo/
 │   ├── midi_to_audio.py
 │   └── plot_training_curves.py
 ├── outputs/
-│   ├── figures/
+│   ├── figures/              # training curves + metric plots
+│   ├── samples/              # 250 generated MIDIs (50 AR + 50 MDLM + 150 infilling)
+│   │   ├── ar/
+│   │   ├── mdlm/
+│   │   └── infilling/
 │   ├── metrics_comparison.png
 │   ├── metrics_results.json
 │   ├── infilling_metrics.json
